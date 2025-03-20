@@ -29,7 +29,6 @@ int main(void)
 {
     SystemInit();
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
-    /* init_USART3(); */
     init_LEDS();
 
     // use this to create a new task
@@ -86,22 +85,17 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 void blinky(void* p)
 {
-    /* uint32_t LED_status = 0; */
-    /* const TickType_t xDelay = 500 * ms_TO_TICKS; */
-
     int16_t x, y, state;
     double t = 0;
     double spin_rate = 0.0062831; // 2pi/1000
     double w = spin_rate;
-
-    /* TIM4->CCR1 = 350; */
-    /* TIM4->CCR2 = 700; */
 
     for(;;)
     {
         x = 700 * cos(t);
         y = 700 * sin(t);
 
+        // TIM4->CCRN is roughly the duty cycle of channel N
         TIM4->CCR1 = (x > 0) * x;
         TIM4->CCR2 = (y > 0) * y;
         TIM4->CCR3 = -(x < 0) * x;
@@ -117,14 +111,7 @@ void blinky(void* p)
         }
     }
 
-    /* GPIO_WriteBit(GPIOD, ORANGE, Bit_SET); */
 
-    /* for(;;) */
-    /* { */
-    /*     LED_status = ! LED_status; */
-    /*     GPIO_WriteBit(GPIOD, ORANGE, LED_status); */
-    /*     vTaskDelay(xDelay); */
-    /* } */
 }
 
 // I think this sets up USART communication for debugging stuff?
@@ -158,6 +145,7 @@ void init_USART3(void)
 
 void init_LEDS(void)
 {
+    // these structs hold data needed to initialize
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
     TIM_OCInitTypeDef TIM_OCInitStructure;
     GPIO_InitTypeDef GPIO_LED;
@@ -165,6 +153,7 @@ void init_LEDS(void)
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
 
+    // enable the leds as alternative function pins
     GPIO_LED.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
     GPIO_LED.GPIO_Mode = GPIO_Mode_AF;
     GPIO_LED.GPIO_Speed = GPIO_Speed_2MHz;
@@ -172,6 +161,7 @@ void init_LEDS(void)
     GPIO_LED.GPIO_PuPd = GPIO_PuPd_UP;
     GPIO_Init(GPIOD, &GPIO_LED);
 
+    // set the alternative function of the leds as connected to TIM4
     GPIO_PinAFConfig(GPIOD, GPIO_PinSource12, GPIO_AF_TIM4);
     GPIO_PinAFConfig(GPIOD, GPIO_PinSource13, GPIO_AF_TIM4);
     GPIO_PinAFConfig(GPIOD, GPIO_PinSource14, GPIO_AF_TIM4);
@@ -192,6 +182,7 @@ void init_LEDS(void)
     TIM_OCInitStructure.TIM_Pulse = 0;
     TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
 
+    // tell TIM4 to treat all 4 channels (connected to leds) as pwm
     TIM_OC1Init(TIM4, &TIM_OCInitStructure);
     TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
     TIM_OC2Init(TIM4, &TIM_OCInitStructure);
@@ -203,5 +194,6 @@ void init_LEDS(void)
 
     TIM_ARRPreloadConfig(TIM4, ENABLE);
 
+    // turn TIM4 on
     TIM_Cmd(TIM4, ENABLE);
 }
