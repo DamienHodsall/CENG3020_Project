@@ -12,16 +12,9 @@
 // put all your task handlers here
 TaskHandle_t blinky_task;
 
-enum LED
-{
-    GREEN = GPIO_Pin_12,
-    ORANGE = GPIO_Pin_13,
-    RED = GPIO_Pin_14,
-    BLUE = GPIO_Pin_15
-};
-
 void init_USART3(void);
 void init_LEDS(void);
+void init_button(void);
 
 void blinky(void* p);
 
@@ -30,6 +23,7 @@ int main(void)
     SystemInit();
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
     init_LEDS();
+    init_button();
 
     // use this to create a new task
     xTaskCreate(blinky, "blinky_task", 256 / 4, NULL, 1, &blinky_task);
@@ -85,15 +79,16 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 void blinky(void* p)
 {
-    int16_t x, y, state;
+    int16_t x, y, state, debounce;
+    int16_t max_brightness = 470; // between 0 and 700
     double t = 0;
-    double spin_rate = 0.0062831; // 2pi/1000
-    double w = spin_rate;
+    double spin_rate = 0.0062831; // 2pi/100
+    double w = 0;
 
     for(;;)
     {
-        x = 700 * cos(t);
-        y = 700 * sin(t);
+        x = max_brightness * cos(t);
+        y = max_brightness * sin(t);
 
         // TIM4->CCRN is roughly the duty cycle of channel N
         TIM4->CCR1 = (x > 0) * x;
@@ -103,15 +98,28 @@ void blinky(void* p)
 
         t += w;
 
-        if (t > 30 && w != 0)
+        if (state && w != 0)
         {
             w -= 0.0000001;
             if (w < 0)
                 w = 0;
         }
+
+        if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0))
+        {
+            if (!debounce)
+            {
+                debounce = 1;
+                if (state)
+                    w = spin_rate;
+                state = ! state;
+            }
+        } else {
+            debounce = 0;
+        }
+
+        vTaskDelay(1 * ms_TO_TICKS);
     }
-
-
 }
 
 // I think this sets up USART communication for debugging stuff?
@@ -196,4 +204,17 @@ void init_LEDS(void)
 
     // turn TIM4 on
     TIM_Cmd(TIM4, ENABLE);
+}
+
+void init_button(void)
+{
+    GPIO_InitTypeDef GPIO_Button;
+
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+
+    GPIO_Button.GPIO_Pin = GPIO_Pin_0;
+    GPIO_Button.GPIO_Mode = GPIO_Mode_IN;
+    GPIO_Button.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Button.GPIO_PuPd = GPIO_PuPd_DOWN;
+    GPIO_Init(GPIOA, &GPIO_Button);
 }
