@@ -12,7 +12,16 @@
 // put all your task handlers here
 TaskHandle_t blinky_task;
 
+enum LED
+{
+    GREEN = GPIO_Pin_12,
+    ORANGE = GPIO_Pin_13,
+    RED = GPIO_Pin_14,
+    BLUE = GPIO_Pin_15
+};
+
 void init_USART3(void);
+void init_LEDS(void);
 
 void blinky(void* p);
 
@@ -21,6 +30,7 @@ int main(void)
     SystemInit();
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);
     /* init_USART3(); */
+    init_LEDS();
 
     // use this to create a new task
     xTaskCreate(blinky, "blinky_task", 256 / 4, NULL, 1, &blinky_task);
@@ -74,36 +84,47 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 // this is my stuff (mostly) that I understand
 
-enum LED
-{
-    GREEN = GPIO_Pin_12,
-    ORANGE = GPIO_Pin_13,
-    RED = GPIO_Pin_14,
-    BLUE = GPIO_Pin_15
-};
-
 void blinky(void* p)
 {
-    GPIO_InitTypeDef GPIO_LED;
+    /* uint32_t LED_status = 0; */
+    /* const TickType_t xDelay = 500 * ms_TO_TICKS; */
 
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
+    int16_t x, y, state;
+    double t = 0;
+    double spin_rate = 0.0062831; // 2pi/1000
+    double w = spin_rate;
 
-    GPIO_LED.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
-    GPIO_LED.GPIO_Mode = GPIO_Mode_OUT;
-    GPIO_LED.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_LED.GPIO_OType = GPIO_OType_PP;
-    GPIO_LED.GPIO_PuPd = GPIO_PuPd_UP;
-    GPIO_Init(GPIOD, &GPIO_LED);
-
-    uint32_t LED_status = 0;
-    const TickType_t xDelay = 500 * ms_TO_TICKS;
+    /* TIM4->CCR1 = 350; */
+    /* TIM4->CCR2 = 700; */
 
     for(;;)
     {
-        LED_status = ! LED_status;
-        GPIO_WriteBit(GPIOD, ORANGE, LED_status);
-        vTaskDelay(xDelay);
+        x = 700 * cos(t);
+        y = 700 * sin(t);
+
+        TIM4->CCR1 = (x > 0) * x;
+        TIM4->CCR2 = (y > 0) * y;
+        TIM4->CCR3 = -(x < 0) * x;
+        TIM4->CCR4 = -(y < 0) * y;
+
+        t += w;
+
+        if (t > 30 && w != 0)
+        {
+            w -= 0.0000001;
+            if (w < 0)
+                w = 0;
+        }
     }
+
+    /* GPIO_WriteBit(GPIOD, ORANGE, Bit_SET); */
+
+    /* for(;;) */
+    /* { */
+    /*     LED_status = ! LED_status; */
+    /*     GPIO_WriteBit(GPIOD, ORANGE, LED_status); */
+    /*     vTaskDelay(xDelay); */
+    /* } */
 }
 
 // I think this sets up USART communication for debugging stuff?
@@ -133,4 +154,54 @@ void init_USART3(void)
     USART_InitStruct.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
     USART_Init(USART3, &USART_InitStruct);
     USART_Cmd(USART3, ENABLE);
+}
+
+void init_LEDS(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_OCInitTypeDef TIM_OCInitStructure;
+    GPIO_InitTypeDef GPIO_LED;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
+
+    GPIO_LED.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
+    GPIO_LED.GPIO_Mode = GPIO_Mode_AF;
+    GPIO_LED.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_LED.GPIO_OType = GPIO_OType_PP;
+    GPIO_LED.GPIO_PuPd = GPIO_PuPd_UP;
+    GPIO_Init(GPIOD, &GPIO_LED);
+
+    GPIO_PinAFConfig(GPIOD, GPIO_PinSource12, GPIO_AF_TIM4);
+    GPIO_PinAFConfig(GPIOD, GPIO_PinSource13, GPIO_AF_TIM4);
+    GPIO_PinAFConfig(GPIOD, GPIO_PinSource14, GPIO_AF_TIM4);
+    GPIO_PinAFConfig(GPIOD, GPIO_PinSource15, GPIO_AF_TIM4);
+
+    uint16_t PrescalerValue = 0;
+    PrescalerValue = (uint16_t) ((SystemCoreClock / 2) / 21000000) - 1;
+
+    TIM_TimeBaseStructure.TIM_Period = 665;
+    TIM_TimeBaseStructure.TIM_Prescaler = PrescalerValue;
+    TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+
+    TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
+
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_Pulse = 0;
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+
+    TIM_OC1Init(TIM4, &TIM_OCInitStructure);
+    TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
+    TIM_OC2Init(TIM4, &TIM_OCInitStructure);
+    TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);
+    TIM_OC3Init(TIM4, &TIM_OCInitStructure);
+    TIM_OC3PreloadConfig(TIM4, TIM_OCPreload_Enable);
+    TIM_OC4Init(TIM4, &TIM_OCInitStructure);
+    TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
+
+    TIM_ARRPreloadConfig(TIM4, ENABLE);
+
+    TIM_Cmd(TIM4, ENABLE);
 }
