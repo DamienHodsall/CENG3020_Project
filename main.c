@@ -13,7 +13,9 @@
 #define TAU 6.283185307179586
 
 // put all your task handlers here
-TaskHandle_t blinky_task;
+TaskHandle_t animation_task;
+
+// declare functions before the main so they can be referenced
 
 void init_USART3(void);
 void init_LEDS(void);
@@ -24,7 +26,7 @@ double randr(uint32_t *seed)
     return (double)rand_r(seed) / (double)RAND_MAX;
 }
 
-void blinky(void* p);
+void animation(void* p);
 
 int main(void)
 {
@@ -34,7 +36,7 @@ int main(void)
     init_button();
 
     // use this to create a new task
-    xTaskCreate(blinky, "blinky_task", 256 / 4, NULL, 1, &blinky_task);
+    xTaskCreate(animation, "animation_task", 256 / 4, NULL, 1, &animation_task);
 
     // this starts everything
     vTaskStartScheduler();
@@ -85,7 +87,7 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 // this is my stuff (mostly) that I understand
 
-void blinky(void* p)
+void animation(void* p)
 {
     int16_t x, y, state, debounce, slowmode, win, flash, count;
     int16_t max_brightness = 666; // between 0 and 666
@@ -211,18 +213,18 @@ void init_LEDS(void)
     // these structs hold data needed to initialize
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
     TIM_OCInitTypeDef TIM_OCInitStructure;
-    GPIO_InitTypeDef GPIO_LED;
+    GPIO_InitTypeDef GPIO_LEDs;
 
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
 
     // enable the leds as alternative function pins
-    GPIO_LED.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
-    GPIO_LED.GPIO_Mode = GPIO_Mode_AF;
-    GPIO_LED.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_LED.GPIO_OType = GPIO_OType_PP;
-    GPIO_LED.GPIO_PuPd = GPIO_PuPd_UP;
-    GPIO_Init(GPIOD, &GPIO_LED);
+    GPIO_LEDs.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
+    GPIO_LEDs.GPIO_Mode = GPIO_Mode_AF;
+    GPIO_LEDs.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_LEDs.GPIO_OType = GPIO_OType_PP;
+    GPIO_LEDs.GPIO_PuPd = GPIO_PuPd_UP;
+    GPIO_Init(GPIOD, &GPIO_LEDs);
 
     // set the alternative function of the leds as connected to TIM4
     GPIO_PinAFConfig(GPIOD, GPIO_PinSource12, GPIO_AF_TIM4);
