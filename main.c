@@ -5,6 +5,7 @@
 #include "stm32f4xx_rcc.h"
 #include "stm32f4xx_usart.h"
 #include "task.h"
+#include "stdlib.h"
 
 #define CCM_RAM __attribute__((section(".ccmram")))
 #define ms_TO_TICKS configTICK_RATE_HZ / 3000 // not sure why but this seems to be 3x slower than it should be
@@ -17,6 +18,11 @@ TaskHandle_t blinky_task;
 void init_USART3(void);
 void init_LEDS(void);
 void init_button(void);
+
+double randr(uint32_t *seed)
+{
+    return (double)rand_r(seed) / (double)RAND_MAX;
+}
 
 void blinky(void* p);
 
