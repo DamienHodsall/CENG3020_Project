@@ -82,10 +82,12 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 void blinky(void* p)
 {
     int16_t x, y, state, debounce;
-    int16_t max_brightness = 470; // between 0 and 700
+    int16_t max_brightness = 666; // between 0 and 666
     double t = 0;
     double spin_rate = TAU / 1000; // 2pi/1000
     double w = 0;
+    double dw = TAU / (6000 * 5999); // roughly 2pi/(6000*5999)
+    double dw_offset = 0;
 
     for(;;)
     {
@@ -102,7 +104,7 @@ void blinky(void* p)
 
         if (state && w != 0)
         {
-            w -= 0.0000001;
+            w -= dw + dw_offset;
             if (w < 0)
                 w = 0;
         }
