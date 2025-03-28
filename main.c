@@ -8,6 +8,8 @@
 
 #define CCM_RAM __attribute__((section(".ccmram")))
 #define ms_TO_TICKS configTICK_RATE_HZ / 3000 // not sure why but this seems to be 3x slower than it should be
+#define PI 3.141592653589793
+#define TAU 6.283185307179586
 
 // put all your task handlers here
 TaskHandle_t blinky_task;
@@ -82,7 +84,7 @@ void blinky(void* p)
     int16_t x, y, state, debounce;
     int16_t max_brightness = 470; // between 0 and 700
     double t = 0;
-    double spin_rate = 0.0062831; // 2pi/100
+    double spin_rate = TAU / 1000; // 2pi/1000
     double w = 0;
 
     for(;;)
