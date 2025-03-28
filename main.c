@@ -104,10 +104,29 @@ void blinky(void* p)
         y = max_brightness * sin(t);
 
         // TIM4->CCRN is roughly the duty cycle of channel N
-        TIM4->CCR1 = (x > 0) * x;
-        TIM4->CCR2 = (y > 0) * y;
-        TIM4->CCR3 = -(x < 0) * x;
-        TIM4->CCR4 = -(y < 0) * y;
+        if (win && w == 0)
+        {
+            if (flash)
+            {
+                TIM4->CCR1 = 0;
+                TIM4->CCR2 = 0;
+                TIM4->CCR3 = 0;
+                TIM4->CCR4 = 0;
+            } else {
+                TIM4->CCR1 = max_brightness;
+            }
+            if (count > 2500)
+            {
+                flash = !flash;
+                count = 0;
+            }
+            count++;
+        } else {
+            TIM4->CCR1 = (x > 0) * x;
+            TIM4->CCR2 = (y > 0) * y;
+            TIM4->CCR3 = -(x < 0) * x;
+            TIM4->CCR4 = -(y < 0) * y;
+        }
 
         t += w;
 
@@ -141,8 +160,10 @@ void blinky(void* p)
                 } else {
                     if (current >= phi && current <= phi + (uint32_t)(prob * (double)T))
                     {
+                        win = 1;
                         dw_offset = 0;
                     } else {
+                        win = 0;
                         dw_offset = (dw / PI) * randr(&seed); // using pi here should guarentee that it doesn't land on green (hopefully?)
                     }
                 }
