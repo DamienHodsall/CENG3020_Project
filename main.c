@@ -87,13 +87,16 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 void blinky(void* p)
 {
-    int16_t x, y, state, debounce;
+    int16_t x, y, state, debounce, slowmode, win, flash, count;
     int16_t max_brightness = 666; // between 0 and 666
     double t = 0;
     double spin_rate = TAU / 1000; // 2pi/1000
     double w = 0;
     double dw = TAU / (6000 * 5999); // roughly 2pi/(6000*5999)
     double dw_offset = 0;
+    uint32_t phi, current, seed;
+    uint32_t T = 1024;
+    double prob = 0.5; // probabily between 0 and 1
 
     for(;;)
     {
@@ -108,7 +111,14 @@ void blinky(void* p)
 
         t += w;
 
-        if (state && w != 0)
+        // this makes the slowing animation only start at the green LED
+        if (!slowmode && state)
+        {
+            if (fmod(t + w, TAU) <= 2 * w)
+                slowmode = 1;
+        }
+
+        if (state && w != 0 && slowmode)
         {
             w -= dw + dw_offset;
             if (w < 0)
@@ -120,8 +130,22 @@ void blinky(void* p)
             if (!debounce)
             {
                 debounce = 1;
+                current = xTaskGetTickCount() % T;
+                seed = current;
+                phi = randr(&seed) * T * (1 - prob);
                 if (state)
+                {
                     w = spin_rate;
+                    slowmode = 0;
+                    flash = 1;
+                } else {
+                    if (current >= phi && current <= phi + (uint32_t)(prob * (double)T))
+                    {
+                        dw_offset = 0;
+                    } else {
+                        dw_offset = (dw / PI) * randr(&seed); // using pi here should guarentee that it doesn't land on green (hopefully?)
+                    }
+                }
                 state = ! state;
             }
         } else {
