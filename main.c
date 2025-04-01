@@ -21,12 +21,13 @@ void init_USART3(void);
 void init_LEDS(void);
 void init_button(void);
 
-double randr(uint32_t *seed)
+double randr()
 {
-    return (double)rand_r(seed) / (double)RAND_MAX;
+    return (double)rand() / (double)RAND_MAX;
 }
 
 void animation(void* p);
+void gamble();
 
 int main(void)
 {
@@ -87,18 +88,36 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 // this is my stuff (mostly) that I understand
 
+uint32_t SEEDED = 0;
+
+void EXTI0_IRQHandler(void)
+{
+    if (EXTI_GetITStatus(EXTI_Line0) != RESET)
+    {
+        if (!SEEDED)
+        {
+            SEEDED = 1;
+            srand(xTaskGetTickCount());
+        }
+
+        gamble();
+
+        EXTI_ClearITPendingBit(EXTI_Line0);
+    }
+}
+
+// these don't need mutex since they are being used on a monoprocessor between only 2 tasks
+// and only one is actually changing the values anyway
+double w = 0;
+double dw = TAU / (6000 * 5999); // roughly 2pi/(6000*5999)
+double dw_offset = 0;
+int16_t state, slowmode, win, flash;
+
 void animation(void* p)
 {
-    int16_t x, y, state, debounce, slowmode, win, flash, count;
+    int16_t x, y, count;
     int16_t max_brightness = 666; // between 0 and 666
     double t = 0;
-    double spin_rate = TAU / 1000; // 2pi/1000
-    double w = 0;
-    double dw = TAU / (6000 * 5999); // roughly 2pi/(6000*5999)
-    double dw_offset = 0;
-    uint32_t phi, current, seed;
-    uint32_t T = 1024;
-    double prob = 0.5; // probabily between 0 and 1
 
     for(;;)
     {
@@ -144,35 +163,6 @@ void animation(void* p)
             w -= dw + dw_offset;
             if (w < 0)
                 w = 0;
-        }
-
-        if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0))
-        {
-            if (!debounce)
-            {
-                debounce = 1;
-                current = xTaskGetTickCount() % T;
-                seed = current;
-                phi = randr(&seed) * T * (1 - prob);
-                if (state)
-                {
-                    w = spin_rate;
-                    slowmode = 0;
-                    flash = 1;
-                } else {
-                    if (current >= phi && current <= phi + (uint32_t)(prob * (double)T))
-                    {
-                        win = 1;
-                        dw_offset = 0;
-                    } else {
-                        win = 0;
-                        dw_offset = (dw / PI) * randr(&seed); // using pi here should guarentee that it doesn't land on green (hopefully?)
-                    }
-                }
-                state = ! state;
-            }
-        } else {
-            debounce = 0;
         }
 
         vTaskDelay(1 * ms_TO_TICKS);
@@ -266,12 +256,56 @@ void init_LEDS(void)
 void init_button(void)
 {
     GPIO_InitTypeDef GPIO_Button;
+    EXTI_InitTypeDef EXTI_Button;
+    NVIC_InitTypeDef NVIC_Button;
 
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
 
     GPIO_Button.GPIO_Pin = GPIO_Pin_0;
     GPIO_Button.GPIO_Mode = GPIO_Mode_IN;
     GPIO_Button.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Button.GPIO_PuPd = GPIO_PuPd_DOWN;
     GPIO_Init(GPIOA, &GPIO_Button);
+
+    SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
+
+    EXTI_Button.EXTI_Line = EXTI_Line0;
+    EXTI_Button.EXTI_LineCmd = ENABLE;
+    EXTI_Button.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_Button.EXTI_Trigger = EXTI_Trigger_Rising;
+    EXTI_Init(&EXTI_Button);
+
+    NVIC_Button.NVIC_IRQChannel = EXTI0_IRQn;
+    NVIC_Button.NVIC_IRQChannelPreemptionPriority = 0x06;
+    NVIC_Button.NVIC_IRQChannelSubPriority = 0x06;
+    NVIC_Button.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_Button);
+}
+
+void gamble()
+{
+    uint32_t phi;
+    uint32_t T = 1024; // closest 2^n to 10^3 cause idk it feels right (and 10^6 breaks everything?)
+    double spin_rate = TAU / 1000; // 2pi/1000
+    double prob = 0.5; // probability between 0 and 1
+
+    uint32_t current = xTaskGetTickCount() % T;
+    phi = randr() * T * (1 - prob);
+    if (state)
+    {
+        w = spin_rate;
+        slowmode = 0;
+        flash = 1;
+    } else {
+        if (current >= phi && current <= phi + (uint32_t)(prob * (double)T))
+        {
+            win = 1;
+            dw_offset = 0;
+        } else {
+            win = 0;
+            dw_offset = (dw / PI) * randr(); // using pi here should guarentee that it doesn't land on green (hopefully?)
+        }
+    }
+    state = ! state;
 }
